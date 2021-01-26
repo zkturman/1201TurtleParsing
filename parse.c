@@ -31,6 +31,8 @@ struct program{
    char *errMessage;
 };
 typedef struct program program;
+
+program *readProgramFile(char *filename);
 void freeLexeme(lexeme *lex);
 void freeSequence(sequence *s);
 void freeProgram(program *p);
@@ -54,8 +56,20 @@ bool ruleOp(program *p);
 bool isOp(char c);
 void test();
 
-int main(int argc, char const *argv[]) {
+int main(int argc, char **argv) {
+   program *p;
+   char *filename;
    test();
+   if (argc != 2){
+      errorQuit("Wrong number of arguments...exiting.\n");
+   }
+   filename = argv[1];
+   p = readProgramFile(filename);
+   ruleMain(p);
+   if (p->valid == false){
+      printf("%s", p->errMessage);
+   }
+   freeProgram(p);
    return 0;
 }
 
@@ -128,7 +142,6 @@ void test(){
    free(prog1->errMessage);
    lex5 = createLexeme("}");
    addLexeme(prog1,lex5);
-   prog1->code->current = lex5->prev;
    assert(ruleInstrctList(prog1) == true);
    assert(ruleMain(prog1) == true);
 
@@ -264,22 +277,215 @@ void test(){
    assert(prog1->valid == false);
    assert(strcmp(prog1->errMessage, "Error: VAR is too many characters. "
       "Issue encountered at word 9: ABC.\n") == 0);
+   freeProgram(prog1);
 
    /*Test Polish and OP*/
+   prog1 = createProgram();
+   lex0 = createLexeme("POLISH");
+   addLexeme(prog1, lex0);
+   assert(rulePolish(prog1) == false);
+   assert(prog1->valid == false);
+   assert(strcmp(prog1->errMessage, "Error: Null POLISH instruction. "
+      "Issue encountered at word 1: POLISH.\n") == 0);
+   prog1->valid = true;
+   free(prog1->errMessage);
+   lex1 = createLexeme("+");
+   addLexeme(prog1, lex1);
    assert(isOp('a') == false);
    assert(isOp('+') == true);
    assert(isOp('-') == true);
    assert(isOp('/') == true);
    assert(isOp('*') == true);
-
-
+   assert(ruleOp(prog1) == true);
+   prog1->code->current = lex1->prev;
+   assert(rulePolish(prog1) == false);
+   assert(prog1->valid == false);
+   assert(strcmp(prog1->errMessage, "Error: Null POLISH instruciton. "
+      "Issue encounters at word 2: +."));
+   prog1->valid = true;
+   free(prog1->errMessage);
+   lex2 = createLexeme(";");
+   addLexeme(prog1,lex2);
+   prog1->code->current = lex2->prev->prev;
+   assert(rulePolish(prog1) == true);
+   lex3 = createLexeme("++");
+   addLexeme(prog1, lex3);
+   assert(ruleOp(prog1) == false);
+   assert(prog1->valid == false);
+   assert(strcmp(prog1->errMessage, "Error: OP is more than one character. "
+      "Issue encountered at word 4: ++.\n") == 0);
+   prog1->valid = true;
+   free(prog1->errMessage);
+   prog1->code->current = lex3->prev;
+   assert(rulePolish(prog1) == false);
+   assert(prog1->valid == false);
+   assert(strcmp(prog1->errMessage, "Error: OP is more than one character. "
+      "Issue encountered at word 4: ++.\n") == 0);
+   prog1->valid = true;
+   free(prog1->errMessage);
+   lex4 = createLexeme("A");
+   lex5 = createLexeme(";");
+   addLexeme(prog1, lex4);
+   addLexeme(prog1, lex5);
+   prog1->code->current = lex5->prev->prev;
+   assert(rulePolish(prog1) == true);
+   lex6 = createLexeme("AA");
+   addLexeme(prog1, lex6);
+   prog1->code->current = lex6->prev;
+   assert(rulePolish(prog1) == false);
+   assert(prog1->valid == false);
+   assert(strcmp(prog1->errMessage, "Error: VAR is too many characters. "
+      "Issue encountered at word 7: AA.\n") == 0);
+   freeProgram(prog1);
 
    /*Test Set*/
+   prog1 = createProgram();
+   addLexeme(prog1, createLexeme("SET"));
+   assert(ruleSet(prog1) == false);
+   assert(prog1->valid == false);
+   assert(strcmp(prog1->errMessage, "Error: Null SET instruction. "
+      "Issue encountered at word 1: SET.\n") == 0);
+   prog1->valid = true;
+   free(prog1->errMessage);
+   addLexeme(prog1, createLexeme("A"));
+   addLexeme(prog1, createLexeme(":="));
+   assert(ruleSet(prog1) == false);
+   assert(prog1->valid == false);
+   assert(strstr(prog1->errMessage, "Error: Expected := in SET instruction.") == NULL);
+   freeProgram(prog1);
+   prog1 = createProgram();
+   addLexeme(prog1, createLexeme("SET"));
+   addLexeme(prog1, createLexeme("A"));
+   prog1->code->current = prog1->code->current->prev;
+   assert(ruleSet(prog1) == false);
+   assert(prog1->valid == false);
+   assert(strcmp(prog1->errMessage, "Error: Expected := in SET instruction. "
+      "Issue encountered at word 2: A.\n") == 0);
+   prog1->valid = true;
+   free(prog1->errMessage);
+   addLexeme(prog1, createLexeme("A"));
+   prog1->code->current = prog1->code->current->prev->prev;
+   assert(ruleSet(prog1) == false);
+   assert(prog1->valid == false);
+   assert(strcmp(prog1->errMessage, "Error: Expected := in SET instruction. "
+      "Issue encountered at word 3: A.\n") == 0);
+   freeProgram(prog1);
+   prog1 = createProgram();
+   addLexeme(prog1, createLexeme("SET"));
+   addLexeme(prog1, createLexeme("A"));
+   addLexeme(prog1, createLexeme(":="));
+   addLexeme(prog1, createLexeme(";"));
+   prog1->code->current = prog1->code->current->prev->prev->prev;
+   assert(ruleSet(prog1) == true);
+   freeProgram(prog1);
 
    /*Test Do*/
+   prog1 = createProgram();
+   addLexeme(prog1, createLexeme("DO"));
+   assert(ruleDo(prog1) == false);
+   assert(prog1->valid == false);
+   assert(strcmp(prog1->errMessage, "Error: Null DO instruction. "
+      "Issue encountered at word 1: DO.\n") == 0);
+   prog1->valid = true;
+   free(prog1->errMessage);
+   addLexeme(prog1, createLexeme("A"));
+   prog1->code->current = prog1->code->current->prev;
+   assert(ruleDo(prog1) == false);
+   assert(prog1->valid == false);
+   assert(strcmp(prog1->errMessage, "Error: Expected FROM in DO instruction. "
+      "Issue encountered at word 2: A.\n") == 0);
+   prog1->valid = true;
+   free(prog1->errMessage);
+   addLexeme(prog1, createLexeme("FRO"));
+   prog1->code->current = prog1->code->current->prev->prev;
+   assert(ruleDo(prog1) == false);
+   assert(prog1->valid == false);
+   assert(strcmp(prog1->errMessage, "Error: Expected FROM in DO instruction. "
+      "Issue encountered at word 3: FRO.\n") == 0);
+   freeProgram(prog1);
+   prog1 = createProgram();
+   addLexeme(prog1, createLexeme("DO"));
+   addLexeme(prog1, createLexeme("A"));
+   addLexeme(prog1, createLexeme("FROM"));
+   prog1->code->current = prog1->code->current->prev->prev;
+   assert(ruleDo(prog1) == false);
+   assert(prog1->valid == false);
+   assert(strcmp(prog1->errMessage, "Error: Expected VARNUM in DO instruction. "
+      "Issue encountered at word 3: FROM.\n") == 0);
+   prog1->valid = true;
+   free(prog1->errMessage);
+   addLexeme(prog1, createLexeme("1"));
+   prog1->code->current = prog1->code->current->prev->prev->prev;
+   assert(ruleDo(prog1) == false);
+   assert(prog1->valid == false);
+   assert(strcmp(prog1->errMessage, "Error: Expected TO in DO instruction. "
+      "Issue encountered at word 4: 1.\n") == 0);
+   prog1->valid = true;
+   free(prog1->errMessage);
+   addLexeme(prog1, createLexeme("TOT"));
+   prog1->code->current = prog1->code->current->prev->prev->prev->prev;
+   assert(ruleDo(prog1) == false);
+   assert(prog1->valid == false);
+   assert(strcmp(prog1->errMessage, "Error: Expected TO in DO instruction. "
+      "Issue encountered at word 5: TOT.\n") == 0);
+   freeProgram(prog1);
+   prog1 = createProgram();
+   addLexeme(prog1, createLexeme("DO"));
+   addLexeme(prog1, createLexeme("A"));
+   addLexeme(prog1, createLexeme("FROM"));
+   addLexeme(prog1, createLexeme("1"));
+   addLexeme(prog1, createLexeme("TO"));
+   prog1->code->current = prog1->code->current->prev->prev->prev->prev;
+   assert(ruleDo(prog1) == false);
+   assert(prog1->valid == false);
+   assert(strcmp(prog1->errMessage, "Error: Expected VARNUM in DO instruction. "
+      "Issue encountered at word 5: TO.\n") == 0);
+   prog1->valid = true;
+   free(prog1->errMessage);
+   addLexeme(prog1, createLexeme("5"));
+   prog1->code->current = prog1->code->current->prev->prev->prev->prev->prev;
+   assert(ruleDo(prog1) == false);
+   assert(prog1->valid == false);
+   assert(strcmp(prog1->errMessage, "Error: Expected { in DO instruction. "
+      "Issue encountered at word 6: 5.\n") == 0);
+   prog1->valid = true;
+   free(prog1->errMessage);
+   addLexeme(prog1, createLexeme("{a"));
+   prog1->code->current = prog1->code->current->prev->prev->prev->prev->prev->prev;
+   assert(ruleDo(prog1) == false);
+   assert(prog1->valid == false);
+   assert(strcmp(prog1->errMessage, "Error: Expected { in DO instruction. "
+      "Issue encountered at word 7: {a.\n") == 0);
+
+
+
 
    free(seq1);
    freeProgram(prog1);
+}
+
+program *readProgramFile(char *filename){
+   char buffer[50];
+   char *token;
+   FILE *fp;
+   program *p;
+   p = createProgram();
+
+   if ((fp = fopen(filename, "r")) == NULL){
+      printf("Could not open file...exiting\n");
+      exit(EXIT_FAILURE);
+   }
+   while (fgets(buffer, 60, fp) != NULL){
+      token = strtok(buffer, "\n\f\r\t ");
+      while (token != NULL){
+         if (addLexeme(p, createLexeme(token)) == false){
+            errorQuit("something went wrong... exiting");
+         }
+         token = strtok(NULL, "\n\f\r ");
+      }
+   }
+   fclose(fp);
+   return p;
 }
 
 void *smartCalloc(int quantity, int size){
@@ -311,19 +517,22 @@ bool ruleMain(program *p){
    if (strcmp(p->code->current->word,"{") != 0){
       return setProgError(p, "Error: Program did not start with {.");
    }
-   return ruleInstrctList(p);
-}
-
-bool ruleInstrctList(program *p){
    if (p->code->current->next == NULL){
       return setProgError(p, "Error: Program did not end with }.");
    }
    p->code->current = p->code->current->next;
+   return ruleInstrctList(p);
+}
+
+bool ruleInstrctList(program *p){
    if (strcmp(p->code->current->word,"}") == 0){
       return p->valid;
    }
    if (ruleInstruction(p) == false){
       return p->valid;
+   }
+   if (p->code->current->next == NULL){
+      return setProgError(p, "Error: Program did not end with }.");
    }
    p->code->current = p->code->current->next;
    return ruleInstrctList(p);
@@ -358,47 +567,48 @@ bool ruleTransform(program *p){
 
 bool ruleDo(program *p){
    if (p->code->current->next == NULL){
-      setProgError(p, "Error: Null DO instruction.");
+      return setProgError(p, "Error: Null DO instruction.");
    }
    p->code->current = p->code->current->next;
    if (ruleVar(p) == false){
       return p->valid;
    }
    if (p->code->current->next == NULL){
-      setProgError(p, "Error: Expected FROM in DO instruction.");
+      return setProgError(p, "Error: Expected FROM in DO instruction.");
    }
    p->code->current = p->code->current->next;
    if (strcmp(p->code->current->word, "FROM") != 0){
-      setProgError(p, "Error: Expected FROM in DO instruction.");
+      return setProgError(p, "Error: Expected FROM in DO instruction.");
    }
    if (p->code->current->next == NULL){
-      setProgError(p, "Error: Expected VARNUM in DO instruction.");
+      return setProgError(p, "Error: Expected VARNUM in DO instruction.");
    }
    p->code->current = p->code->current->next;
    if (ruleVarnum(p) == false){
       return p->valid;
    }
    if (p->code->current->next == NULL){
-      setProgError(p, "Error: Expected TO in DO instruction.");
+      return setProgError(p, "Error: Expected TO in DO instruction.");
    }
    p->code->current = p->code->current->next;
    if (strcmp(p->code->current->word, "TO") != 0){
-      setProgError(p, "Error: Expected TO in DO instruction.");
+      return setProgError(p, "Error: Expected TO in DO instruction.");
    }
    if (p->code->current->next == NULL){
-      setProgError(p, "Error: Expected VARNUM in DO instruction.");
+      return setProgError(p, "Error: Expected VARNUM in DO instruction.");
    }
    p->code->current = p->code->current->next;
    if (ruleVarnum(p) == false){
       return p->valid;
    }
    if (p->code->current->next == NULL){
-      setProgError(p, "Error: Expected { in DO instruction.");
+      return setProgError(p, "Error: Expected { in DO instruction.");
    }
    p->code->current = p->code->current->next;
    if (strcmp(p->code->current->word,"{") != 0){
       return setProgError(p, "Error: Expected { in DO instruction.");
    }
+   p->code->current = p->code->current->next;
    return ruleInstrctList(p);
 }
 
@@ -445,7 +655,7 @@ bool ruleSet(program *p){
       return setProgError(p, "Error: Expected := in SET instruction.");
    }
    p->code->current = p->code->current->next;
-   if (strcmp(p->code->current->word, ":=") == 0){
+   if (strcmp(p->code->current->word, ":=") != 0){
       return setProgError(p, "Error: Expected := in SET instruction.");
    }
    if (rulePolish(p) == false){
@@ -462,7 +672,7 @@ bool rulePolish(program *p){
    if (strcmp(p->code->current->word, ";") == 0){
       return p->valid;
    }
-   if (strlen(p->code->current->word) == 1 && isOp(p->code->current->word[0])){
+   if (strspn(p->code->current->word, "+-/*") > 0){
       if (ruleOp(p) == false){
          return p->valid;
       }
@@ -476,9 +686,6 @@ bool rulePolish(program *p){
 bool ruleOp(program *p){
    if (strlen(p->code->current->word) > 1){
       return setProgError(p, "Error: OP is more than one character.");
-   }
-   if (isOp(p->code->current->word[0]) == false){
-      return setProgError(p, "Error: Invalid OP found.");
    }
    return p->valid;
 }
@@ -502,6 +709,7 @@ void freeLexeme(lexeme *lex){
    free(lex->word);
    free(lex);
 }
+
 void freeSequence(sequence *s){
    lexeme *lex;
    lex = s->start;
@@ -512,6 +720,7 @@ void freeSequence(sequence *s){
    freeLexeme(lex);
    free(s);
 }
+
 void freeProgram(program *p){
    if (p->valid == false){
       free(p->errMessage);
@@ -519,6 +728,7 @@ void freeProgram(program *p){
    freeSequence(p->code);
    free(p);
 }
+
 lexeme *createLexeme(char *word){
    lexeme *lex;
    lex = (lexeme *)smartCalloc(1,sizeof(lexeme));
@@ -526,11 +736,13 @@ lexeme *createLexeme(char *word){
    lex->word = strcpy(lex->word,word);
    return lex;
 }
+
 sequence *createSequence(){
    sequence *s;
    s = (sequence *)smartCalloc(1, sizeof(sequence));
    return s;
 }
+
 program *createProgram(){
    program *p;
    sequence *seq;
@@ -541,6 +753,7 @@ program *createProgram(){
    p->valid = true;
    return p;
 }
+
 bool addLexeme(program *p, lexeme *word){
    if (p == NULL || word == NULL){
       return false;
