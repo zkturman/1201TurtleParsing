@@ -3,15 +3,34 @@
 #include <string.h>
 #include <ctype.h>
 #include <assert.h>
+#include "neillsdl2.h"
+#include "Stack/stack.h"
 #define STARTNUM 30
 #define ERRORBUFFER 100
+#define RECTSIZE 20
+#define MILLISECONDDELAY 20
+#define ALPHANUM 26
 #define WHITESPACE "\n\f\r\t "
+#define OPCHARS "+-/*"
 #define DIGITS "0123456789"
 #define NUMCHARS "-.0123456789"
+#define DEGTORAD (M_PI / 180)
 #define STREQ(A, B) (strcmp(A, B) == 0)
 
-enum bool {false, true};
-typedef enum bool bool;
+struct loop{
+   double to;
+   double from;
+   int varIndex;
+};
+typedef struct loop loop;
+
+struct turtle{
+   double xcoord;
+   double ycoord;
+   double angle;
+   double vars[26];
+};
+typedef struct turtle turtle;
 
 struct lexeme{
    char *word;
@@ -33,6 +52,10 @@ struct program{
    int capacity;
    bool valid;
    char *errMessage;
+   turtle squirt;
+   double vars[26];
+   stack *polish;
+   SDL_Simplewin *sw;
 };
 typedef struct program program;
 
@@ -46,13 +69,23 @@ bool ruleInstruction(program *p);
 
 bool ruleTransform(program *p);
 
+void drawline(program *p, double distance);
+
+double getNewX(double distance, turtle t);
+
+double getNewY(double distance, turtle t);
+
+double getNewAngle(double oldAng, double rotation, bool right);
+
 bool ruleDo(program *p);
 
-bool ruleDoInfo(program *p);
+bool ruleDoInfo(program *p, loop *doLoop);
 
-bool ruleDoFrom(program *p);
+bool ruleDoFrom(program *p, loop *doLoop);
 
-bool ruleDoTo(program *p);
+bool ruleDoTo(program *p, loop *doLoop);
+
+bool ruleDoLoop(program *p, loop doLoop);
 
 bool ruleSet(program *p);
 
@@ -66,7 +99,11 @@ int charFrequency(char *str, char c);
 
 bool ruleVar(program *p);
 
+double getValue(program *p);
+
 bool setProgError(program *p, char *message);
+
+int getAlphaIndex(char c);
 
 program *createProgram();
 
@@ -86,23 +123,35 @@ void freeSequence(sequence *s);
 
 void freeLexeme(lexeme *lex);
 
-void test();
+void testParse();
 
 bool testProgram(char *progText, char *errorMessage);
+
+void testInterp();
 
 int main(int argc, char **argv) {
    program *p;
    char *filename;
-   test();
+   SDL_Simplewin sw;
+   testParse();
+   testInterp();
    if (argc != 2){
-      errorQuit("Incorrent command arguments...exiting.");
+      errorQuit("Wrong number of arguments...exiting.\n");
    }
+   Neill_SDL_Init(&sw);
    filename = argv[1];
    p = readProgramFile(filename);
+   p->sw = &sw;
+   Neill_SDL_SetDrawColour(&sw, 255, 255, 255);
    ruleMain(p);
+   do{
+      Neill_SDL_Events(&sw);
+   } while (!sw.finished);
    if (p->valid == false){
       printf("%s", p->errMessage);
    }
+   SDL_Quit();
+   atexit(SDL_Quit);
    freeProgram(p);
    return 0;
 }
@@ -115,13 +164,14 @@ program *readProgramFile(char *filename){
    p = createProgram();
 
    if ((fp = fopen(filename, "r")) == NULL){
-      errorQuit("Could not open file...exiting");
+      printf("Could not open file...exiting\n");
+      exit(EXIT_FAILURE);
    }
    while (fgets(buffer, 50, fp) != NULL){
       token = strtok(buffer, WHITESPACE);
       while (token != NULL){
          if (addLexeme(p, createLexeme(token)) == false){
-            errorQuit("Couldn't add lexeme... exiting");
+            errorQuit("Could not add word...exiting\n");
          }
          token = strtok(NULL, WHITESPACE);
       }
@@ -157,13 +207,13 @@ bool ruleInstrctList(program *p){
 }
 
 bool ruleInstruction(program *p){
-   if (STREQ(p->code->current->word, "FD")){
+   if (STREQ(p->code->current->word,"FD")){
       return ruleTransform(p);
    }
-   else if (STREQ(p->code->current->word, "RT")){
+   else if (STREQ(p->code->current->word,"RT")){
       return ruleTransform(p);
    }
-   else if (STREQ(p->code->current->word, "LT")){
+   else if (STREQ(p->code->current->word,"LT")){
       return ruleTransform(p);
    }
    else if (STREQ(p->code->current->word, "DO")){
@@ -176,14 +226,70 @@ bool ruleInstruction(program *p){
 }
 
 bool ruleTransform(program *p){
+   double value;
    if (p->code->current->next == NULL){
       return setProgError(p, "Error: No VARNUM found.");
    }
    p->code->current = p->code->current->next;
-   return ruleVarnum(p);
+   if (ruleVarnum(p) == false){
+      return p->valid;
+   }
+   value = getValue(p);
+   if (STREQ(p->code->current->prev->word,"FD")){
+      if (p->sw != NULL){
+         drawline(p, value);
+      }
+   }
+   else if (STREQ(p->code->current->prev->word,"RT")){
+      p->squirt.angle = getNewAngle(p->squirt.angle, value, true);
+   }
+   else if (STREQ(p->code->current->prev->word,"LT")){
+      p->squirt.angle = getNewAngle(p->squirt.angle, value, false);
+   }
+   return p->valid;
+}
+
+void drawline(program *p, double distance){
+   double x, y, newX, newY;
+   x = p->squirt.xcoord;
+   y = p->squirt.ycoord;
+   newX = getNewX(distance, p->squirt);
+   newY = getNewY(distance, p->squirt);
+   SDL_RenderDrawLine(p->sw->renderer, x, y, newX, newY);
+   SDL_Delay(MILLISECONDDELAY);
+   Neill_SDL_UpdateScreen(p->sw);
+   p->squirt.xcoord = newX;
+   p->squirt.ycoord = newY;
+}
+
+double getNewX(double distance, turtle t){
+   /*distance * sin(angle)*/
+   double newX;
+   newX = distance * cos(t.angle) + t.xcoord;
+   return newX;
+}
+
+double getNewY(double distance, turtle t){
+   /*distance * cos(angle)*/
+   double newY;
+   newY = distance * sin(t.angle) + t.ycoord;
+   return newY;
+}
+
+double getNewAngle(double oldAng, double rotation, bool right){
+   double newAng;
+   rotation = rotation * DEGTORAD;
+   if (right == true){
+      newAng = oldAng - rotation;
+   }
+   else{
+      newAng = oldAng + rotation;
+   }
+   return newAng;
 }
 
 bool ruleDo(program *p){
+   loop doLoop;
    if (p->code->current->next == NULL){
       return setProgError(p, "Error: Null DO instruction.");
    }
@@ -191,7 +297,8 @@ bool ruleDo(program *p){
    if (ruleVar(p) == false){
       return p->valid;
    }
-   if (ruleDoInfo(p) == false){
+   doLoop.varIndex = getAlphaIndex(p->code->current->word[0]);
+   if (ruleDoInfo(p, &doLoop) == false){
       return p->valid;
    }
    if (p->code->current->next == NULL){
@@ -202,20 +309,20 @@ bool ruleDo(program *p){
       return setProgError(p, "Error: Expected { in DO instruction.");
    }
    p->code->current = p->code->current->next;
-   return ruleInstrctList(p);
+   return ruleDoLoop(p, doLoop);
 }
 
-bool ruleDoInfo(program *p){
-   if (ruleDoFrom(p) == false){
+bool ruleDoInfo(program *p, loop *doLoop){
+   if (ruleDoFrom(p, doLoop) == false){
       return p->valid;
    }
-   if (ruleDoTo(p) == false){
+   if (ruleDoTo(p, doLoop) == false){
       return p->valid;
    }
    return p->valid;
 }
 
-bool ruleDoFrom(program *p){
+bool ruleDoFrom(program *p, loop *doLoop){
    if (p->code->current->next == NULL){
       return setProgError(p, "Error: Expected FROM in DO instruction.");
    }
@@ -230,10 +337,12 @@ bool ruleDoFrom(program *p){
    if (ruleVarnum(p) == false){
       return p->valid;
    }
+   doLoop->from = getValue(p);
+   p->vars[doLoop->varIndex] = doLoop->from;
    return p->valid;
 }
 
-bool ruleDoTo(program *p){
+bool ruleDoTo(program *p, loop *doLoop){
    if (p->code->current->next == NULL){
       return setProgError(p, "Error: Expected TO in DO instruction.");
    }
@@ -248,10 +357,25 @@ bool ruleDoTo(program *p){
    if (ruleVarnum(p) == false){
       return p->valid;
    }
+   doLoop->to = getValue(p);
+   return p->valid;
+}
+
+bool ruleDoLoop(program *p, loop doLoop){
+   lexeme *word;
+   word = p->code->current;
+   do{
+      p->code->current = word;
+      if (ruleInstrctList(p) == false){
+         return p->valid;
+      }
+   } while(p->vars[doLoop.varIndex]++ < doLoop.to);
    return p->valid;
 }
 
 bool ruleSet(program *p){
+   int alphaIndex;
+   double result;
    if (p->code->current->next == NULL){
       return setProgError(p, "Error: Null SET instruction.");
    }
@@ -259,6 +383,7 @@ bool ruleSet(program *p){
    if (ruleVar(p) == false){
       return p->valid;
    }
+   alphaIndex = getAlphaIndex(p->code->current->word[0]);
    if (p->code->current->next == NULL){
       return setProgError(p, "Error: Expected := in SET instruction.");
    }
@@ -269,10 +394,20 @@ bool ruleSet(program *p){
    if (rulePolish(p) == false){
       return p->valid;
    }
+   if (p->sw != NULL){
+      if (stack_pop(p->polish, &result) == false){
+         return setProgError(p, "Error: Attempted to use SET with null value.");
+      }
+      p->vars[alphaIndex] = result;
+      if (stack_peek(p->polish, &result) == true){
+         return setProgError(p, "Error: Incorrect POLISH notation.");
+      }
+   }
    return p->valid;
 }
 
 bool rulePolish(program *p){
+   double value;
    if (p->code->current->next == NULL){
       return setProgError(p, "Error: Null POLISH instruction.");
    }
@@ -280,37 +415,64 @@ bool rulePolish(program *p){
    if (STREQ(p->code->current->word, ";")){
       return p->valid;
    }
-   if (strspn(p->code->current->word, "+-/*") > 0){
+   if (strspn(p->code->current->word, OPCHARS) > 0){
       if (ruleOp(p) == false){
          return p->valid;
       }
+      return rulePolish(p);
    }
    else if (ruleVarnum(p) == false){
       return p->valid;
    }
+   value = getValue(p);
+   stack_push(p->polish, value);
    return rulePolish(p);
 }
 
 bool ruleOp(program *p){
+   double v1, v2;
    if (strlen(p->code->current->word) > 1){
       return setProgError(p, "Error: OP is more than one character.");
    }
+   if (p->sw != NULL){
+      if ((stack_pop(p->polish, &v2) == false)
+         || (stack_pop(p->polish, &v1) == false)){
+         return setProgError(p, "Error: OP operated on a non-existant number.");
+      }
+      switch(p->code->current->word[0]){
+         case '+':
+            stack_push(p->polish, (v1 + v2));
+            break;
+         case '-':
+            stack_push(p->polish, (v1 - v2));
+            break;
+         case '/':
+            stack_push(p->polish, (v1 / v2));
+            break;
+         case '*':
+            stack_push(p->polish, (v1 * v2));
+            stack_peek(p->polish, &v1);
+            break;
+         default:
+            return setProgError(p, "Error: OP used an invalid operator.");
+      }
+}
    return p->valid;
 }
 
 bool ruleVarnum(program *p){
    if (strspn(p->code->current->word, DIGITS)
       == strlen(p->code->current->word)){
-         return p->valid;
+      return p->valid;
    }
    if (strspn(p->code->current->word, NUMCHARS)
       == strlen(p->code->current->word)){
-         if (charFrequency(p->code->current->word, '-') > 0){
-            if (charFrequency(p->code->current->word, '-') > 1
-            || p->code->current->word[0] != '-'){
-               return setProgError(p, "Error: VARNUM contains invalid characters.");
-            }
+      if (charFrequency(p->code->current->word, '-') > 0){
+         if ((charFrequency(p->code->current->word, '-') > 1)
+            || (p->code->current->word[0] != '-')){
+            return setProgError(p, "Error: VARNUM contains invalid characters.");
          }
+      }
       if (charFrequency(p->code->current->word, '.') > 1){
          return setProgError(p, "Error: VARNUM contains invalid characters.");
       }
@@ -342,6 +504,18 @@ bool ruleVar(program *p){
    return p->valid;
 }
 
+double getValue(program *p){
+   double value;
+   if (strspn(p->code->current->word, NUMCHARS)
+      == strlen(p->code->current->word)){
+      value = atof(p->code->current->word);
+   }
+   else{
+      value = p->vars[getAlphaIndex(p->code->current->word[0])];
+   }
+   return value;
+}
+
 bool setProgError(program *p, char *message){
    char fullError[ERRORBUFFER];
    p->valid = false;
@@ -349,17 +523,30 @@ bool setProgError(program *p, char *message){
       message, p->code->current->index, p->code->current->word);
    p->errMessage = (char *)smartCalloc(strlen(fullError) + 1,sizeof(char));
    strcpy(p->errMessage,fullError);
+   if (p->sw != NULL){
+      p->sw->finished = 1;
+   }
    return false;
+}
+
+int getAlphaIndex(char c){
+   return (c - 'A');
 }
 
 program *createProgram(){
    program *p;
    sequence *seq;
+   stack *s;
    p = (program *)smartCalloc(1,sizeof(program));
    seq = createSequence();
+   s = stack_init();
    p->code = seq;
    p->length = 0;
    p->valid = true;
+   p->squirt.xcoord = WWIDTH / 2;
+   p->squirt.ycoord = WHEIGHT / 2;
+   p->squirt.angle = 90 * DEGTORAD;
+   p->polish = s;
    return p;
 }
 
@@ -406,7 +593,7 @@ void *smartCalloc(int quantity, int size){
 }
 
 void errorQuit(char *message){
-   fprintf(stderr,"%s\n",message);
+   fprintf(stderr,"%s",message);
    exit(EXIT_FAILURE);
 }
 
@@ -415,6 +602,7 @@ void freeProgram(program *p){
       free(p->errMessage);
    }
    freeSequence(p->code);
+   stack_free(p->polish);
    free(p);
 }
 
@@ -434,7 +622,52 @@ void freeLexeme(lexeme *lex){
    free(lex);
 }
 
-void test(){
+void testInterp(){
+   program *p;
+   double distance, x1, y1, angle;
+   p = createProgram();
+
+   /*Test getting new coordinates*/
+   addLexeme(p, createLexeme("30"));
+   distance = getValue(p);
+   assert(fabs(distance - 30.0) < 0.0001);
+   assert(getAlphaIndex('A') == 0);
+   assert(getAlphaIndex('B') == 1);
+   assert(getAlphaIndex('Z') == 25);
+   p->vars[0] = 20.0;
+   addLexeme(p, createLexeme("A"));
+   distance = getValue(p);
+   assert(fabs(distance - 20.0) < 0.0001);
+   x1 = getNewX(distance, p->squirt);
+   y1 = getNewY(distance, p->squirt);
+   assert(fabs(x1 - (WWIDTH / 2)) < 0.0001);
+   assert(fabs(y1 - ((WHEIGHT / 2) + 20.0)) < 0.0001);
+   p->squirt.angle = 0;
+   x1 = getNewX(distance, p->squirt);
+   y1 = getNewY(distance, p->squirt);
+   assert(fabs(x1 - ((WWIDTH / 2) + 20.0)) < 0.0001);
+   assert(fabs(y1 - (WHEIGHT / 2)) < 0.0001);
+   p->squirt.angle = M_PI;
+   x1 = getNewX(distance, p->squirt);
+   y1 = getNewY(distance, p->squirt);
+   assert(fabs(x1 - ((WWIDTH / 2) - 20)) < 0.0001);
+   assert(fabs(y1 - (WHEIGHT / 2)) < 0.0001);
+
+   /*test angle conversions are correct*/
+   p->squirt.angle = 90 * DEGTORAD;
+   angle = getValue(p);
+   assert(fabs(angle - 20.0) < 0.0001);
+   angle = getNewAngle(p->squirt.angle, angle, true);
+   assert(fabs(angle - (70 * DEGTORAD)) < 0.0001);
+   addLexeme(p, createLexeme("50"));
+   p->squirt.angle = 70 * DEGTORAD;
+   angle = getValue(p);
+   angle = getNewAngle(p->squirt.angle, angle, false);
+   assert(fabs(angle - (120 * DEGTORAD)) < 0.0001);
+   freeProgram(p);
+}
+
+void testParse(){
    lexeme *lex0, *lex1, *lex2, *lex3, *lex4, *lex5, *lex6, *lex7, *lex8;
    sequence *seq1;
    program *prog1;
