@@ -1,0 +1,24 @@
+{
+   DO A FROM 1 TO 150 {
+      COLOUR 0 0 0
+      SET B := A 2 * ;
+      FD B
+      RT 60
+      DO C FROM 1 TO 3 {
+         COLOUR RANDOM 0 RANDOM
+         SET D := A 2 / ;
+         FD D
+         RT 120
+      }
+      COLOUR 0 0 0
+      FD B
+      RT 60
+      DO E FROM 1 TO 3 {
+         COLOUR RANDOM RANDOM 0
+         SET F := A 2 / ;
+         FD F
+         RT 120
+      }
+   }
+   COLOUR 255 255 255
+}

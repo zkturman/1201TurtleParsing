@@ -1,0 +1,34 @@
+{
+   JUMP -400 , 0
+   SET E := 100 ;
+   COLOUR 0 0 E
+   RT 90
+   DO B FROM 1 TO 100 {
+      FD 800
+      RT 90
+      FD 1
+      RT 90
+      FD 800
+      LT 90
+      FD 1
+      LT 90
+      SET F := B 1 * ;
+      SET G := E F - ;
+      COLOUR 0 0 G
+   }
+   LT 90
+   COLOUR 150 0 150
+   SET A := -1 ;
+   DO B FROM 1 TO 200 {
+      SET A := A -1 * ;
+      SET C := B A * ;
+      SET D := C 10 / ;
+      FD C
+      RT 90
+      FD D
+      RT 90
+      FD C
+      LT 180
+      JUMP RANDOM , 0
+   }
+}

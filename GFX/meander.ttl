@@ -1,0 +1,30 @@
+{
+   COLOUR RED
+   DO A FROM 1 TO 255 {
+      FD 10
+      RT RANDOM
+      COLOUR 255 A 0
+   }
+   DO A FROM 1 TO 255 {
+      FD 10
+      RT RANDOM
+      SET B := 256 A - ;
+      COLOUR B 255 0
+   }
+   DO A FROM 1 TO 255 {
+      FD 10
+      RT RANDOM
+      COLOUR 0 255 A
+   }
+   DO A FROM 1 TO 255 {
+      FD 10
+      RT RANDOM
+      SET B := 256 A - ;
+      COLOUR 0 B 255
+   }
+   DO A FROM 1 TO 255 {
+      FD 10
+      RT RANDOM
+      COLOUR A 0 255
+   }
+}

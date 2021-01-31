@@ -1,0 +1,14 @@
+{
+   COLOUR 150 255 0
+   DO A FROM 1 TO 20 {
+      COLOUR RANDCOL
+      DO B FROM 1 TO 4 {
+         DO C FROM 1 TO 4 {
+            SET D := A B 5 * * ;
+            FD D
+            RT 72
+         }
+      }
+      JUMP 0 , 0
+   }
+}

@@ -1,0 +1,35 @@
+{
+   COLOUR RED
+   DO A FROM 1 TO 255 {
+      SET B := A 10 / ;
+      FD B
+      RT 30
+      COLOUR 255 A 0
+   }
+   DO A FROM 1 TO 255 {
+      SET B := A 255 + 10 / ;
+      FD B
+      RT 30
+      SET C := 256 A - ;
+      COLOUR C 255 0
+   }
+   DO A FROM 1 TO 255 {
+      SET B := A 510 + 10 / ;
+      FD B
+      RT 30
+      COLOUR 0 255 A
+   }
+   DO A FROM 1 TO 255 {
+      SET B := A 765 + 10 / ;
+      FD B
+      RT 30
+      SET C := 256 A - ;
+      COLOUR 0 C 255
+   }
+   DO A FROM 1 TO 255 {
+      SET B := A 1020 + 10 / ;
+      FD B
+      RT 30
+      COLOUR A 0 255
+   }
+}

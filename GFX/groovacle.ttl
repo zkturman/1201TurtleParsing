@@ -1,0 +1,16 @@
+{
+   DO A FROM 1 TO 20 {
+      DO B FROM 1 TO 20 {
+         COLOUR 0 200 255
+         FD B
+         LT 30
+         DO C FROM 1 TO 8 {
+            COLOUR RANDCOL
+            SET D := B 5 / ;
+            FD D
+            LT 45
+         }
+      }
+      JUMP RANDOM , RANDOM
+   }
+}

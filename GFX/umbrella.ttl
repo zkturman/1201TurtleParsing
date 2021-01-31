@@ -1,0 +1,9 @@
+{
+   COLOUR RED
+   DO A FROM 1 TO 1000 {
+      SET B := A 10 / ;
+      FD B
+      RT 45
+      COLOUR 255 A A
+   }
+}

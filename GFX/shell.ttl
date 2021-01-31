@@ -1,0 +1,11 @@
+{
+   DO A FROM 1 TO 200 {
+      FD A
+      LT 31
+      DO B FROM 1 TO 3 {
+         SET C := A 2 / ;
+         FD C
+         RT 30
+      }
+   }
+}

@@ -1,0 +1,15 @@
+{
+   DO A FROM 1 TO 200 {
+      FD A
+      SET B := A 10 / ;
+      SET C := 0 A - ;
+      RT 90
+      FD B
+      LT 90
+      FD B
+      LT 90
+      FD B
+      RT 90
+      LT 40
+   }
+}

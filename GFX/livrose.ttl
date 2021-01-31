@@ -1,0 +1,9 @@
+{
+   DO A FROM 1 TO 200 {
+      SET C := A 55 + ;
+      COLOUR RANDOM 0 0
+      SET D := A 1.5 * ;
+      FD D
+      RT 62
+   }
+}
