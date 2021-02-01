@@ -1,0 +1,130 @@
+Extension Overview
+
+In this extension, I have extended for the formal grammar featured in this assignment. This new formal grammar is as follows:
+
+   <MAIN> ::= "{" <INSTRCTLST>
+   <INSTRCTLST> ::= <INSTRUCTION><INSTRCTLST> |
+   "}"
+   <INSTRUCTION> ::= <FD> |
+                     <LT> |
+                     <RT> |
+                     <DO> |
+                     <SET> |
+                     <JUMP> |
+                     <COLOUR> |
+   <FD> ::= "FD" <RANDVARNUM>
+   <LT> ::= "LT" <RANDVARNUM>
+   <RT> ::= "RT" <RANDVARNUM>
+   <DO> ::= "DO" <VAR> "FROM" <VARNUM> "TO" <VARNUM> "{" <INSTRCTLST>
+   <VAR> ::= [A−Z]
+   <VARNUM> ::= number | <VAR>
+   <SET> ::= "SET" <VAR> ":=" <POLISH>
+   <POLISH> ::= <OP> <POLISH> | <RANDVARNUM> <POLISH> | ";"
+   <OP> ::= "+" | "−" | "*" | "/"
+   <JUMP> ::= "JUMP" <RANDVARNUM> "," <RANDVARNUM>
+   <COLOUR> ::= "COLOUR RED" | "COLOUR BLUE" | "COLOUR GREEN" | "COLOUR RANDCOL" | "COLOUR" <RANDVARNUM> <RANDVARNUM> <RANDVARNUM>
+   <RANDVARNUM> ::= "RANDOM" | <VARNUM>
+
+This new grammar features the addition three rules: <JUMP>, <COLOUR>, and <RANDVARNUM>. The rules for 
+<FD>, <LT>, <RT>, and <POLISH> have also been modified to include <RANDVARNUM>. In addition to enabling
+parsing for these changes, interpretation has also been added. Here is a brief summary of the effects:
+	-	JUMP allows changing the current coordinates of the turtle without drawing.
+	-	COLOUR allows changing the current draw colour of the turtle.
+	-	RANDVARNUM includes a "RANDOM" option, which allows generating a random value instead of a preset one.
+		The "Random" opiton was not added to <VARNUM> because random input for <Do> could cause unexpected behaviour.
+		
+As part of the extension I also explored the capabilities of the new grammar. Several examples of this can be observed in the GFX folder, 
+with screenshots provided. Here I will go over some brief highlights of new features.
+
+Alternating colours (xmascandy.ttl):
+	DO A FROM 1 TO 150 {
+      COLOUR RED
+      FD A
+      LT 31
+      DO B FROM 1 TO 3 {
+         COLOUR GREEN
+         SET C := A 2 / ;
+         FD C
+         RT 30
+      }
+   }
+
+Adding depth with colours (livrose.ttl):
+	DO A FROM 1 TO 200 {
+      SET C := A 55 + ;
+      COLOUR RANDOM 0 0
+      SET D := A 1.5 * ;
+      FD D
+      RT 62
+   }
+
+Slowly transition between colours (meander.ttl):
+   DO A FROM 1 TO 255 {
+      FD 10
+      RT RANDOM
+      COLOUR 255 A 0
+   }
+
+Create color gradients (cityscape.ttl):
+   JUMP -400 , 0
+   SET E := 100 ;
+   COLOUR 0 0 E
+   RT 90
+   DO B FROM 1 TO 100 {
+      FD 800
+      RT 90
+      FD 1
+      RT 90
+      FD 800
+      LT 90
+      FD 1
+      LT 90
+      SET F := B 1 * ;
+      SET G := E F - ;
+      COLOUR 0 0 G
+   }
+
+Moving turtle without drawing, or tail up (axes.ttl):
+	COLOUR 0 0 0
+    SET B := A 2 * ;
+    FD B
+    RT 60
+
+Create random patterns (fracture.ttl):
+    DO B FROM 1 TO 10 {
+		FD RANDOM
+        RT 30
+    }
+    JUMP 0 , 0
+
+Create random paths (meander.ttl):
+	COLOUR RED
+	DO A FROM 1 TO 255 {
+      FD 10
+      RT RANDOM
+      COLOUR 255 A 0
+	}
+
+Move turtle to specified coordinates to repeat paterns (groovacle.ttl):
+	DO A FROM 1 TO 20 {
+		DO B FROM 1 TO 20 {
+			COLOUR 0 200 255
+			FD B
+			LT 30
+			DO C FROM 1 TO 8 {
+				COLOUR RANDCOL
+				SET D := B 5 / ;
+				FD D
+				LT 45
+			}
+		}
+      JUMP RANDOM , RANDOM
+   }
+
+Create randomly proportioned patterns ():
+
+Other features include quick presets for colours that allow setting
+RED, GREEN, BLUE, and RANDCOL rather than specifying RGB values. Specifically
+for RANDCOL, care has been taken to incorporate only combinations of
+two colours (e.g. red and green or red and blue) so that results remove
+less desirable colours.

@@ -3,6 +3,10 @@
 #include <string.h>
 #include <ctype.h>
 #include <assert.h>
+
+#define COMMANDARGS 2
+#define FILEINDEX 1
+#define FILEBUFFER 50
 #define STARTNUM 30
 #define ERRORBUFFER 100
 #define WHITESPACE "\n\f\r\t "
@@ -30,74 +34,107 @@ typedef struct sequence sequence;
 struct program{
    sequence *code;
    int length;
-   int capacity;
    bool valid;
    char *errMessage;
 };
 typedef struct program program;
 
+/*Reads a file and generates a sequence of words by delimiting the file at
+whitespace characters. These words are added to the returned program struct.*/
 program *readProgramFile(char *filename);
 
+/*Returns true if a program follows the rule for the <MAIN> grammar*/
 bool ruleMain(program *p);
 
+/*A recursive function that returns true if all instructions in a program
+follows the rules defined by <INSTRCTLST> and <INSTRUCTION> grammar*/
 bool ruleInstrctList(program *p);
 
+/*Returns true if an instruction follows <INSTRUCTION> grammar*/
 bool ruleInstruction(program *p);
 
+/*Returns true if the subsequent word for FD, RT, and LT instructions
+is a valid variable or number.*/
 bool ruleTransform(program *p);
 
+/*Returns true if the DO instruction follows the correct grammar*/
 bool ruleDo(program *p);
 
+/*Returns true if the DO instruction has correct FROM and TO grammar*/
 bool ruleDoInfo(program *p);
 
+/*Returns true if the DO instruction has the correct FROM grammar*/
 bool ruleDoFrom(program *p);
 
+/*Returns true if the DO instruction has the correct TO grammar*/
 bool ruleDoTo(program *p);
 
+/*Returns true if the SET instruction has the correct grammar*/
 bool ruleSet(program *p);
 
+/*A recursive function that returns true if a POLISH expression has the
+correct grammar*/
 bool rulePolish(program *p);
 
+/*Returns true if the current word is a valid operator*/
 bool ruleOp(program *p);
 
+/*Returns true if the current word meets the criteria for <VARNUM> grammar*/
 bool ruleVarnum(program *p);
 
+/*Returns the number of times a character c appears in a string*/
 int charFrequency(char *str, char c);
 
+/*Returns true if the current word meets the criteria for the <VAR> grammar*/
 bool ruleVar(program *p);
 
+/*Only returns false. Stops file reading and sets the error message in a
+program struct when grammar rules aren't met.*/
 bool setProgError(program *p, char *message);
 
+/*Returns an initialised program struct that contains a sequence of words*/
 program *createProgram();
 
+/*Returns a sequence struct that will hold a doubly linked list of words*/
 sequence *createSequence();
 
+/*Returns a lexeme struct that that will hold a word from a file*/
 lexeme *createLexeme(char *word);
 
+/*Returns true when the word is added to the program. This increases the
+program's length variable and updates the index of the current word.*/
 bool addLexeme(program *p, lexeme *word);
 
+/*Used to calloc space and check for failed memory allocation. If allocation
+fails, the program quits.*/
 void *smartCalloc(int quantity, int size);
 
+/*Quits the program and prints the specified message to stderr*/
 void errorQuit(char *message);
 
+/*Frees memory allocated for a program structure*/
 void freeProgram(program *p);
 
+/*Frees memory allocated for a sequence structure*/
 void freeSequence(sequence *s);
 
+/*Frees memory allocated for a lexeme structure*/
 void freeLexeme(lexeme *lex);
 
+/*Used to test functions adn functionality of parser*/
 void test();
 
+/*Used to simulate program structures for realistic testing scenarios*/
 bool testProgram(char *progText, char *errorMessage);
 
 int main(int argc, char **argv) {
    program *p;
    char *filename;
    test();
-   if (argc != 2){
+   if (argc != COMMANDARGS){
       errorQuit("Incorrent command arguments...exiting.");
    }
-   filename = argv[1];
+   filename = argv[FILEINDEX];
    p = readProgramFile(filename);
    ruleMain(p);
    if (p->valid == false){
@@ -108,7 +145,7 @@ int main(int argc, char **argv) {
 }
 
 program *readProgramFile(char *filename){
-   char buffer[50];
+   char buffer[FILEBUFFER];
    char *token;
    FILE *fp;
    program *p;
@@ -117,7 +154,7 @@ program *readProgramFile(char *filename){
    if ((fp = fopen(filename, "r")) == NULL){
       errorQuit("Could not open file...exiting");
    }
-   while (fgets(buffer, 50, fp) != NULL){
+   while (fgets(buffer, FILEBUFFER, fp) != NULL){
       token = strtok(buffer, WHITESPACE);
       while (token != NULL){
          if (addLexeme(p, createLexeme(token)) == false){
@@ -464,7 +501,6 @@ void test(){
    assert(prog1->length == 0);
    assert(prog1->valid == true);
    assert(prog1->errMessage == NULL);
-   assert(prog1->capacity == 0);
 
    /*test adding lexemes*/
    assert(addLexeme(NULL,lex1) == false);
@@ -915,6 +951,28 @@ void test(){
    assert(testProgram("{ DO A FROM X TO X { FD 30 } }", errorMessage));
    assert(testProgram("{ DO A FROM X TO X { FD 30 FD 30 FD 30 } }", errorMessage));
    assert(testProgram("{ DO A FROM X TO X { FD 30 RT 30 LT 30 } }", errorMessage));
+   assert(!testProgram("{ SET ", errorMessage));
+   assert(STREQ("Error: Null SET instruction. Issue encountered at word 2: SET.\n", errorMessage));
+   assert(!testProgram("{ SET A ", errorMessage));
+   assert(STREQ("Error: Expected := in SET instruction. Issue encountered at word 3: A.\n", errorMessage));
+   assert(!testProgram("{ SET A := ", errorMessage));
+   assert(STREQ("Error: Null POLISH instruction. Issue encountered at word 4: :=.\n", errorMessage));
+   assert(!testProgram("{ SET A := 1 ", errorMessage));
+   assert(STREQ("Error: Null POLISH instruction. Issue encountered at word 5: 1.\n", errorMessage));
+   assert(!testProgram("{ DO ", errorMessage));
+   assert(STREQ("Error: Null DO instruction. Issue encountered at word 2: DO.\n", errorMessage));
+   assert(!testProgram("{ DO A ", errorMessage));
+   assert(STREQ("Error: Expected FROM in DO instruction. Issue encountered at word 3: A.\n", errorMessage));
+   assert(!testProgram("{ DO A FROM ", errorMessage));
+   assert(STREQ("Error: Expected VARNUM in DO instruction. Issue encountered at word 4: FROM.\n", errorMessage));
+   assert(!testProgram("{ DO A FROM X ", errorMessage));
+   assert(STREQ("Error: Expected TO in DO instruction. Issue encountered at word 5: X.\n", errorMessage));
+   assert(!testProgram("{ DO A FROM X TO ", errorMessage));
+   assert(STREQ("Error: Expected VARNUM in DO instruction. Issue encountered at word 6: TO.\n", errorMessage));
+   assert(!testProgram("{ DO A FROM X TO X ", errorMessage));
+   assert(STREQ("Error: Expected { in DO instruction. Issue encountered at word 7: X.\n", errorMessage));
+
+
 
    free(callocTest);
    free(seq1);

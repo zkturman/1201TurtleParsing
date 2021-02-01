@@ -5,6 +5,11 @@
 #include <assert.h>
 #include "neillsdl2.h"
 #include "Stack/stack.h"
+
+#define COMMANDARGS 2
+#define FILEINDEX 1
+#define COLOURMAX 256
+#define FILEBUFFER 50
 #define STARTNUM 30
 #define ERRORBUFFER 100
 #define RECTSIZE 20
@@ -14,6 +19,7 @@
 #define OPCHARS "+-/*"
 #define DIGITS "0123456789"
 #define NUMCHARS "-.0123456789"
+#define FACENORTH 90
 #define DEGTORAD (M_PI / 180)
 #define STREQ(A, B) (strcmp(A, B) == 0)
 
@@ -49,7 +55,6 @@ typedef struct sequence sequence;
 struct program{
    sequence *code;
    int length;
-   int capacity;
    bool valid;
    char *errMessage;
    turtle squirt;
@@ -59,74 +64,129 @@ struct program{
 };
 typedef struct program program;
 
+/*Reads a file and generates a sequence of words by delimiting the file at
+whitespace characters. These words are added to the returned program struct.*/
 program *readProgramFile(char *filename);
 
+/*Returns true if a program follows the rule for the <MAIN> grammar*/
 bool ruleMain(program *p);
 
+/*A recursive function that returns true if all instructions in a program
+follows the rules defined by <INSTRCTLST> and <INSTRUCTION> grammar*/
 bool ruleInstrctList(program *p);
 
+/*Returns true if an instruction follows <INSTRUCTION> grammar*/
 bool ruleInstruction(program *p);
 
+/*Returns true if the subsequent word for FD, RT, and LT instructions
+is a valid variable or number. Uses SDL to draw lines for FD. RT and LT update
+the angle of the turtle struct.*/
 bool ruleTransform(program *p);
 
+/*Draws a line in SDL and updates the screen based on a given distance and the
+current coordinates of the turtle. Uses functions from neillsd2.*/
 void drawline(program *p, double distance);
 
+/*Gets the new x coordinate for the turtle based on the given distance.*/
 double getNewX(double distance, turtle t);
 
+/*Gets the new y coordinate for the turtle based on the given distance.*/
 double getNewY(double distance, turtle t);
 
+/*Updates the angle of the turtle in radiant based on a rotation in degrees.
+Rotates right if right is true, otherwise left.*/
 double getNewAngle(double oldAng, double rotation, bool right);
 
+/*Returns true if the DO instruction follows the correct grammar*/
 bool ruleDo(program *p);
 
+/*Returns true if the DO instruction has correct FROM and TO grammar. Updates
+the to and from variables of the loop stuct.*/
 bool ruleDoInfo(program *p, loop *doLoop);
 
+/*Returns true if the DO instruction has the correct FROM grammar. Updates the
+for variable of the loop struct.*/
 bool ruleDoFrom(program *p, loop *doLoop);
 
+/*Returns true if the DO instruction has the correct TO grammar. Updates the
+to variable of the loop struct.*/
 bool ruleDoTo(program *p, loop *doLoop);
 
+/*Returns true if the grammar of the DO loop is correct. Performs the actions
+in the loop a certain number of times. The specified variable is set to the FROM
+value and incremented by one. The loop repeats until the TO value is exceeded.*/
 bool ruleDoLoop(program *p, loop doLoop);
 
+/*Returns true if the SET instruction has the correct grammar. Updates the value
+of a given variable. All variables are initialised to 0 if not set here.*/
 bool ruleSet(program *p);
 
+/*A recursive function that returns true if a POLISH expression has the
+correct grammar. Adds numbers to a stack and operates on the top two stack
+doubles. The stack ADT by Neill Campbell is used for this, but uses doubles
+instead of ints.*/
 bool rulePolish(program *p);
 
+/*Returns true if the current word is a valid operator. Performs +, -, *, and /
+operations on the stack by popping the top two values and pushing the result.*/
 bool ruleOp(program *p);
 
+/*Returns true if the current word meets the criteria for <VARNUM> grammar*/
 bool ruleVarnum(program *p);
 
+/*Returns the number of times a character c appears in a string*/
 int charFrequency(char *str, char c);
 
+/*Returns true if the current word meets the criteria for the <VAR> grammar*/
 bool ruleVar(program *p);
 
+/*Converts the current word from a string to a double.*/
 double getValue(program *p);
 
+/*Only returns false. Stops file reading and sets the error message in a
+program struct when grammar rules aren't met.*/
 bool setProgError(program *p, char *message);
 
+/*Returns the index for the program vars array that corresponds to a given VAR*/
 int getAlphaIndex(char c);
 
+/*Returns an initialised program struct that contains a sequence of words*/
 program *createProgram();
 
+/*Returns a sequence struct that will hold a doubly linked list of words*/
 sequence *createSequence();
 
+/*Returns a lexeme struct that that will hold a word from a file*/
 lexeme *createLexeme(char *word);
 
+/*Returns true when the word is added to the program. This increases the
+program's length variable and updates the index of the current word.*/
 bool addLexeme(program *p, lexeme *word);
 
+/*Used to calloc space and check for failed memory allocation. If allocation
+fails, the program quits.*/
 void *smartCalloc(int quantity, int size);
 
+/*Quits the program and prints the specified message to stderr*/
 void errorQuit(char *message);
 
+/*Frees memory allocated for a program structure*/
 void freeProgram(program *p);
 
+/*Frees memory allocated for a sequence structure*/
 void freeSequence(sequence *s);
 
+/*Frees memory allocated for a lexeme structure*/
 void freeLexeme(lexeme *lex);
 
+/*Used to simulate program structures for realistic testing scenarios. Focuses
+on functionality of the parser.*/
 void testParse();
 
+/*Used to simulate program structures for realistic testing scenarios*/
 bool testProgram(char *progText, char *errorMessage);
 
+/*Tests new functions added for the interpreter*/
 void testInterp();
 
 int main(int argc, char **argv) {
@@ -135,14 +195,14 @@ int main(int argc, char **argv) {
    SDL_Simplewin sw;
    testParse();
    testInterp();
-   if (argc != 2){
+   if (argc != COMMANDARGS){
       errorQuit("Wrong number of arguments...exiting.\n");
    }
    Neill_SDL_Init(&sw);
-   filename = argv[1];
+   filename = argv[FILEINDEX];
    p = readProgramFile(filename);
    p->sw = &sw;
-   Neill_SDL_SetDrawColour(&sw, 255, 255, 255);
+   Neill_SDL_SetDrawColour(&sw, COLOURMAX - 1, COLOURMAX - 1, COLOURMAX - 1);
    ruleMain(p);
    do{
       Neill_SDL_Events(&sw);
@@ -157,7 +217,7 @@ int main(int argc, char **argv) {
 }
 
 program *readProgramFile(char *filename){
-   char buffer[50];
+   char buffer[FILEBUFFER];
    char *token;
    FILE *fp;
    program *p;
@@ -167,7 +227,7 @@ program *readProgramFile(char *filename){
       printf("Could not open file...exiting\n");
       exit(EXIT_FAILURE);
    }
-   while (fgets(buffer, 50, fp) != NULL){
+   while (fgets(buffer, FILEBUFFER, fp) != NULL){
       token = strtok(buffer, WHITESPACE);
       while (token != NULL){
          if (addLexeme(p, createLexeme(token)) == false){
@@ -537,6 +597,7 @@ program *createProgram(){
    program *p;
    sequence *seq;
    stack *s;
+   int i;
    p = (program *)smartCalloc(1,sizeof(program));
    seq = createSequence();
    s = stack_init();
@@ -545,8 +606,12 @@ program *createProgram(){
    p->valid = true;
    p->squirt.xcoord = WWIDTH / 2;
    p->squirt.ycoord = WHEIGHT / 2;
-   p->squirt.angle = 90 * DEGTORAD;
+   p->squirt.angle = FACENORTH * DEGTORAD;
    p->polish = s;
+   /*initialise all vars to zero*/
+   for (i = 0; i < ALPHANUM; i++){
+      p->vars[i] = 0;
+   }
    return p;
 }
 
@@ -697,7 +762,6 @@ void testParse(){
    assert(prog1->length == 0);
    assert(prog1->valid == true);
    assert(prog1->errMessage == NULL);
-   assert(prog1->capacity == 0);
 
    /*test adding lexemes*/
    assert(addLexeme(NULL,lex1) == false);
@@ -1148,7 +1212,27 @@ void testParse(){
    assert(testProgram("{ DO A FROM X TO X { FD 30 } }", errorMessage));
    assert(testProgram("{ DO A FROM X TO X { FD 30 FD 30 FD 30 } }", errorMessage));
    assert(testProgram("{ DO A FROM X TO X { FD 30 RT 30 LT 30 } }", errorMessage));
-
+   assert(!testProgram("{ SET ", errorMessage));
+   assert(STREQ("Error: Null SET instruction. Issue encountered at word 2: SET.\n", errorMessage));
+   assert(!testProgram("{ SET A ", errorMessage));
+   assert(STREQ("Error: Expected := in SET instruction. Issue encountered at word 3: A.\n", errorMessage));
+   assert(!testProgram("{ SET A := ", errorMessage));
+   assert(STREQ("Error: Null POLISH instruction. Issue encountered at word 4: :=.\n", errorMessage));
+   assert(!testProgram("{ SET A := 1 ", errorMessage));
+   assert(STREQ("Error: Null POLISH instruction. Issue encountered at word 5: 1.\n", errorMessage));
+   assert(!testProgram("{ DO ", errorMessage));
+   assert(STREQ("Error: Null DO instruction. Issue encountered at word 2: DO.\n", errorMessage));
+   assert(!testProgram("{ DO A ", errorMessage));
+   assert(STREQ("Error: Expected FROM in DO instruction. Issue encountered at word 3: A.\n", errorMessage));
+   assert(!testProgram("{ DO A FROM ", errorMessage));
+   assert(STREQ("Error: Expected VARNUM in DO instruction. Issue encountered at word 4: FROM.\n", errorMessage));
+   assert(!testProgram("{ DO A FROM X ", errorMessage));
+   assert(STREQ("Error: Expected TO in DO instruction. Issue encountered at word 5: X.\n", errorMessage));
+   assert(!testProgram("{ DO A FROM X TO ", errorMessage));
+   assert(STREQ("Error: Expected VARNUM in DO instruction. Issue encountered at word 6: TO.\n", errorMessage));
+   assert(!testProgram("{ DO A FROM X TO X ", errorMessage));
+   assert(STREQ("Error: Expected { in DO instruction. Issue encountered at word 7: X.\n", errorMessage));
+   
    free(callocTest);
    free(seq1);
    freeProgram(prog1);
